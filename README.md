@@ -1,2 +1,2 @@
 # Network-Programming
-Repository for a university "Network Programming" course.
+Repository for a university "Network Programming" course assignments.
