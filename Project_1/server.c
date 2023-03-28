@@ -60,7 +60,7 @@ int calculate(char *buf, int bufSize, bool **errorStream)
 {
     int result = 0;
     long long int number = 0;
-    char liczba[7];
+    char liczba[20];
     memset(liczba, 0, sizeof(liczba));
     char znak[2];
     memset(znak, 0, sizeof(znak));
@@ -90,12 +90,11 @@ int calculate(char *buf, int bufSize, bool **errorStream)
         temp++;
     }
 
-    if (number / 2 > INT_MAX / 2 || (number - 1) / 2 < INT_MIN / 2)
+    if (number > INT_MAX || number < INT_MIN)
     {
         *errorStream = (bool *)true;
         return -1;
     }
-
     result = (int)number;
     return result;
 }
@@ -128,7 +127,7 @@ int main(int argc, char const *argv[])
     unsigned char buf[65536];
     memset(buf, 0, sizeof(buf));
     int result;
-    bool errorStream = false;
+    bool *errorStream = false;
 
     bool keep_on_handling_clients = true;
     while (keep_on_handling_clients)
@@ -156,16 +155,18 @@ int main(int argc, char const *argv[])
             }
             else
             {
-                printf("ERROR - przepelnienie wyniku");
+                printf("ERROR - przepelnienie wyniku\n");
                 memset(buf, 0, sizeof(buf));
                 sprintf(buf, "%s", "ERROR");
+                errorStream = false;
             }
         }
         else
         {
-            printf("\nERROR - niepoprawne dane\n");
+            printf("ERROR - niepoprawne dane\n");
             memset(buf, 0, sizeof(buf));
             sprintf(buf, "%s", "ERROR");
+            errorStream = false;
         }
 
         cnt = sendto(sock, buf, bufSize(buf, sizeof(buf)), 0, (struct sockaddr *)&clnt_addr, clnt_addr_len);
