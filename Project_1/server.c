@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <stdbool.h>
+#include <limits.h>
 
 int bufSize(char *buf, int bufSize)
 {
@@ -55,54 +56,52 @@ bool validate(char *buf, int bufSize)
     return true;
 }
 
-long int calculate(char *buf, int bufSize)
+int calculate(char *buf, int bufSize, bool **errorStream)
 {
-    long int result = 0;
-    char liczba[11];
-    char znak[1];
-    int i = 0;
+    int result = 0;
+    long long int number = 0;
+    char liczba[7];
+    memset(liczba, 0, sizeof(liczba));
+    char znak[2];
+    memset(znak, 0, sizeof(znak));
     bool add = true;
     char *temp = buf;
     while (temp < buf + bufSize)
     {
-        if (*temp >= 48 && *temp <= 57)
+        while (*temp != 43 && *temp != 45 && temp < buf + bufSize)
         {
-            if (i >= 10)
-            {
-                printf("\nBŁĄD! Przepełnienie liczby!\n");
-                return 0;
-            }
-            znak = *temp;
-            printf("\nZnak: %c", znak[0]);
+            znak[0] = *temp;
             strcat(liczba, znak);
-            i++;
+            temp++;
         }
-        if (*temp == 43 || *temp == 45)
+
+        if (add)
+            number += atoll(liczba);
+        else
+            number -= atoll(liczba);
+
+        memset(liczba, 0, sizeof(liczba));
+
+        if (temp < buf + bufSize)
         {
-            if (add)
-            {
-                result += atol(liczba);
-            }
-            else
-            {
-                result -= atol(liczba);
-            }
-            liczba[0] = '\0';
-            i = 0;
-            add = ((*temp == 43) ? true : false);
+            add = (*temp == 43) ? true : false;
         }
+
         temp++;
     }
+
+    if (number / 2 > INT_MAX / 2 || (number - 1) / 2 < INT_MIN / 2)
+    {
+        *errorStream = (bool *)true;
+        return -1;
+    }
+
+    result = (int)number;
     return result;
 }
 
 int main(int argc, char const *argv[])
 {
-    if (argc != 2)
-    {
-        perror("Zła ilość argumentów!\nPodaj numer portu jako argument!");
-        return -1;
-    }
     int sock;
     int rc;      // "rc" to skrót słów "result code"
     ssize_t cnt; // na wyniki zwracane przez recvfrom() i sendto()
@@ -117,7 +116,7 @@ int main(int argc, char const *argv[])
     struct sockaddr_in addr = {
         .sin_family = AF_INET,
         .sin_addr = {.s_addr = htonl(INADDR_ANY)},
-        .sin_port = htons(atoi(argv[1]))};
+        .sin_port = htons(2020)};
 
     rc = bind(sock, (struct sockaddr *)&addr, sizeof(addr));
     if (rc == -1)
@@ -126,8 +125,10 @@ int main(int argc, char const *argv[])
         return 1;
     }
 
-    unsigned char buf[65528];
-    long int result;
+    unsigned char buf[65536];
+    memset(buf, 0, sizeof(buf));
+    int result;
+    bool errorStream = false;
 
     bool keep_on_handling_clients = true;
     while (keep_on_handling_clients)
@@ -137,25 +138,43 @@ int main(int argc, char const *argv[])
 
         clnt_addr_len = sizeof(clnt_addr);
 
-        cnt = recvfrom(sock, buf, 65528, 0, (struct sockaddr_in *)&clnt_addr, &clnt_addr_len);
+        cnt = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr_in *)&clnt_addr, &clnt_addr_len);
         if (cnt == -1)
         {
             perror("recvfrom");
             return 1;
         }
         printf("\nOtrzymano działanie: %s = ", buf);
-        result = calculate(buf, sizeof(buf));
-        printf("%ld\n\n", result);
+        if (validate(buf, bufSize(buf, sizeof(buf))))
+        {
+            result = calculate(buf, bufSize(buf, sizeof(buf)), (bool **)&errorStream);
+            if (!errorStream)
+            {
+                printf("%d", result);
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "%d", result);
+            }
+            else
+            {
+                printf("ERROR - przepelnienie wyniku");
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "%s", "ERROR");
+            }
+        }
+        else
+        {
+            printf("\nERROR - niepoprawne dane\n");
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf, "%s", "ERROR");
+        }
 
-        sprintf(buf, "%ld", result);
-
-        cnt = sendto(sock, buf, sizeof(buf), 0, (struct sockaddr *)&clnt_addr, clnt_addr_len);
+        cnt = sendto(sock, buf, bufSize(buf, sizeof(buf)), 0, (struct sockaddr *)&clnt_addr, clnt_addr_len);
         if (cnt == -1)
         {
             perror("sendto");
             return 1;
         }
-        printf("Sent %zi bytes\n", cnt);
+        printf("\nSent %zi bytes\n\n", cnt);
     }
 
     rc = close(sock);
