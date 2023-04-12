@@ -18,6 +18,8 @@ int bufSize(char *buf, int bufSize)
     {
         if (*temp != '\0')
             returnSize++;
+        else
+            return returnSize;
         temp++;
     }
     return returnSize;
@@ -124,7 +126,7 @@ int main(int argc, char const *argv[])
         return 1;
     }
 
-    unsigned char buf[65536];
+    char buf[65536];
     memset(buf, 0, sizeof(buf));
     int result;
     bool *errorStream = false;
@@ -137,35 +139,33 @@ int main(int argc, char const *argv[])
 
         clnt_addr_len = sizeof(clnt_addr);
 
-        cnt = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr_in *)&clnt_addr, &clnt_addr_len);
+        memset(buf, 0, sizeof(buf));
+        cnt = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr *)&clnt_addr, &clnt_addr_len);
         if (cnt == -1)
         {
             perror("recvfrom");
             return 1;
         }
         printf("\nOtrzymano działanie: %s = ", buf);
-        if (validate(buf, bufSize(buf, sizeof(buf))))
+        if (validate(buf, cnt))
         {
-            result = calculate(buf, bufSize(buf, sizeof(buf)), (bool **)&errorStream);
+            result = calculate(buf, cnt, (bool **)&errorStream);
             if (!errorStream)
             {
                 printf("%d", result);
-                memset(buf, 0, sizeof(buf));
-                sprintf(buf, "%d", result);
+                sprintf((char *)buf, "%d", result);
             }
             else
             {
                 printf("ERROR - przepelnienie wyniku\n");
-                memset(buf, 0, sizeof(buf));
-                sprintf(buf, "%s", "ERROR");
+                sprintf((char *)buf, "%s", "ERROR");
                 errorStream = false;
             }
         }
         else
         {
             printf("ERROR - niepoprawne dane\n");
-            memset(buf, 0, sizeof(buf));
-            sprintf(buf, "%s", "ERROR");
+            sprintf((char *)buf, "%s", "ERROR");
             errorStream = false;
         }
 
